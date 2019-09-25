@@ -2578,11 +2578,10 @@ class TestRegularGridInterpolator(object):
         # from #3703; test that interpolator object construction succeeds
         values = np.ones((10, 20, 30), dtype='>f4')
         points = [np.arange(n) for n in values.shape]
-        xi = [(1, 1, 1)]
         interpolator = RegularGridInterpolator(points, values)
         interpolator = RegularGridInterpolator(points, values, fill_value=0.)
 
-    def test_two_paths(self):
+    def test_new_values(self):
         size = 4
         points, values = self._get_sample_4d(n=size)
         sample = np.random.random((int((size)**4), 4))
@@ -2594,6 +2593,24 @@ class TestRegularGridInterpolator(object):
         result2 = interp2(values=values)
 
         assert_array_almost_equal(result1, result2)
+
+        interp2(values=values, method='nearest',
+                fill_value=-9999, bounds_error=False)
+
+    def test_missing_xi(self):
+        size = 4
+        points, values = self._get_sample_4d(n=size)
+        interp = RegularGridInterpolator(points, values=values)
+        with pytest.raises(AttributeError):
+            interp()
+
+    def test_missing_values(self):
+        size = 4
+        points, values = self._get_sample_4d(n=size)
+        sample = np.random.random((int((size)**4), 4))
+        interp = RegularGridInterpolator(points, xi=sample)
+        with pytest.raises(AttributeError):
+            interp()
 
 
 class MyValue(object):

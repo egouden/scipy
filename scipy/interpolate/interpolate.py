@@ -2329,9 +2329,6 @@ class RegularGridInterpolator(object):
     values : array_like, shape (m1, ..., mn, ...), optional
         The data on the regular grid in n dimensions.
 
-    xi : ndarray of shape (..., ndim), optional
-        The coordinates to sample the gridded data at
-
     method : str, optional
         The method of interpolation to perform. Supported are "linear" and
         "nearest". This parameter will become the default for the object's
@@ -2346,6 +2343,9 @@ class RegularGridInterpolator(object):
         If provided, the value to use for points outside of the
         interpolation domain. If None, values outside
         the domain are extrapolated.
+
+    xi : ndarray of shape (..., ndim), optional
+        The coordinates to sample the gridded data at
 
     Methods
     -------
@@ -2378,17 +2378,25 @@ class RegularGridInterpolator(object):
     ``data`` is now a 3D array with ``data[i,j,k] = f(x[i], y[j], z[k])``.
     Next, define an interpolating function from this data:
 
-    >>> my_interpolating_function = RegularGridInterpolator((x, y, z), data)
+    >>> my_interpolating_function = RegularGridInterpolator((x, y, z), values = data)
 
     Evaluate the interpolating function at the two points
     ``(x,y,z) = (2.1, 6.2, 8.3)`` and ``(3.3, 5.2, 7.1)``:
 
     >>> pts = np.array([[2.1, 6.2, 8.3], [3.3, 5.2, 7.1]])
-    >>> my_interpolating_function(pts)
+    >>> my_interpolating_function(xi = pts)
     array([ 125.80469388,  146.30069388])
 
     which is indeed a close approximation to
     ``[f(2.1, 6.2, 8.3), f(3.3, 5.2, 7.1)]``.
+
+    Evaluate a new function:
+
+    >>> def f2(x, y, z):
+    ...     return 2 * z**3 + 3 * x**2 - y
+    >>> data2 = f2(*np.meshgrid(x, y, z, indexing='ij', sparse=True))
+    >>> my_interpolating_function(values = data2)
+    array([1150.69507813,  743.39191406])
 
     See also
     --------
@@ -2413,8 +2421,8 @@ class RegularGridInterpolator(object):
     # this class is based on code originally programmed by Johannes Buchner,
     # see https://github.com/JohannesBuchner/regulargrid
 
-    def __init__(self, points, values=None, xi=None, method="linear",
-                 bounds_error=True, fill_value=np.nan):
+    def __init__(self, points, values=None, method="linear", bounds_error=True,
+                 fill_value=np.nan, xi=None):
 
         self._set_method(method)
 
@@ -2422,27 +2430,24 @@ class RegularGridInterpolator(object):
 
         self.fill_value = fill_value
 
+        self.bounds_error = bounds_error
+
         if values is not None:
             self._set_values(values)
-
-        self.bounds_error = bounds_error
 
         if xi is not None:
             self._set_xi(xi)
             self._set_interp_param()
 
-    def __call__(self, xi=None, values=None, method=None,
-                 bounds_error=True, fill_value=np.nan):
+    def __call__(self, xi=None, method=None, bounds_error=None,
+                 fill_value=None, values=None):
         """
-        Interpolation at coordinates
+        Interpolation of values at coordinates
 
         Parameters
         ----------
         xi : ndarray of shape (..., ndim), optional
             The coordinates to sample the gridded data at
-
-        values : array_like, shape (m1, ..., mn, ...), optional
-            The data on the regular grid in n dimensions.
 
         method : str, optional
             The method of interpolation to perform. Supported are "linear" and
@@ -2459,21 +2464,33 @@ class RegularGridInterpolator(object):
             interpolation domain. If None, values outside
             the domain are extrapolated.
 
-        """
-        if method is not None:
-            self._set_method(method)
+        values : array_like, shape (m1, ..., mn, ...), optional
+            The data on the regular grid in n dimensions.
 
-        self.bounds_error = bounds_error and self.bounds_error
+        """
 
         if xi is not None:
             self._set_xi(xi)
             self._set_interp_param()
 
-        if not np.isnan(fill_value):
+        if method is not None:
+            self._set_method(method)
+            self._set_interp_param()
+
+        if fill_value is not None:
             self.fill_value = fill_value
+
+        if bounds_error is not None:
+            self.bounds_error = bounds_error
 
         if values is not None:
             self._set_values(values)
+
+        if not hasattr(self, "xi"):
+            raise AttributeError("Missing target points xi")
+
+        if not hasattr(self, "values"):
+            raise AttributeError("Missing source values")
 
         if self.method == "linear":
             result = self._evaluate_linear()
